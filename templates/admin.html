@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% set active = 'admin' %}
+{% block body %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<div class="card">
+    <h2>Document ingestion</h2>
+    <p>Upload PDFs, CSVs, or TXT files. We'll chunk them, annotate metadata, and push them into the vector store.</p>
+    <form class="upload-form" id="upload-form">
+        <input type="file" id="doc-file" accept=".pdf,.csv,.txt" required>
+        <button class="btn" type="submit">Upload & Chunk</button>
+    </form>
+    <div id="upload-status" style="margin-top:1rem; color:#38bdf8;"></div>
+    <div id="chunk-preview" class="context-panel" style="margin-top:1rem;"></div>
+</div>
+
+<div class="card">
+    <h2>Expert intake chat</h2>
+    <p>Talk to the intake AI as if you were logging a new process or experience. It will prompt you for missing info and auto-save when confident.</p>
+    <div style="display:flex; gap:1rem; flex-wrap: wrap;">
+        <div style="flex:2; min-width: 320px;">
+            <div id="expert-chat-log" class="chat-log" style="height:360px;"></div>
+            <form id="expert-chat-form" style="margin-top:1rem; display:flex; gap:0.75rem;">
+                <input id="expert-input" type="text" placeholder="Share a field observation..." style="flex:1; padding:0.75rem; border-radius:0.5rem; border:1px solid #334155; background:#0f172a; color:#f8fafc;" required>
+                <button class="btn" type="submit">Send</button>
+                <button class="btn secondary" id="save-chunk" type="button">Save</button>
+            </form>
+            <div id="expert-status" style="margin-top:0.75rem; color:#38bdf8;"></div>
+        </div>
+        <div style="flex:1; min-width:280px;">
+            <h3>Auto-added knowledge</h3>
+            <div id="expert-chunk-log" class="context-panel" style="max-height:360px;"></div>
+        </div>
+    </div>
+</div>
+<script>
+const uploadForm = document.getElementById('upload-form');
+const docFile = document.getElementById('doc-file');
+const uploadStatus = document.getElementById('upload-status');
+const chunkPreview = document.getElementById('chunk-preview');
+
+const expertForm = document.getElementById('expert-chat-form');
+const expertInput = document.getElementById('expert-input');
+const expertLog = document.getElementById('expert-chat-log');
+const expertStatus = document.getElementById('expert-status');
+const expertChunkLog = document.getElementById('expert-chunk-log');
+const expertMessages = [
+    { role: 'model', content: "Hello! I'm the Expert Intake AI. Please share any new troubleshooting steps, field observations, or general knowledge you'd like to add to the system." }
+];
+
+const escapeHtml = (value = '') => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+uploadForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!docFile.files.length) return;
+    const formData = new FormData();
+    formData.append('file', docFile.files[0]);
+    uploadStatus.textContent = 'Processing...';
+
+    try {
+        const response = await fetch('/api/admin/upload', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (!data.ok) {
+            throw new Error(data.error || 'Upload failed');
+        }
+        uploadStatus.textContent = `Created ${data.summary.total_chunks} new chunks.`;
+        chunkPreview.innerHTML = data.summary.chunks.map(chunk => `
+            <div style="margin-bottom:1rem;">
+                <strong>#${chunk.chunk_id} — ${escapeHtml(chunk.title)}</strong>
+                <pre style="white-space:pre-wrap;">${escapeHtml(JSON.stringify(chunk.metadata, null, 2))}</pre>
+            </div>
+        `).join('');
+        docFile.value = '';
+    } catch (err) {
+        uploadStatus.textContent = 'Error: ' + err.message;
+    }
+});
+
+const renderExpertMessages = () => {
+    expertLog.innerHTML = expertMessages.map(msg => `
+        <div class="chat-entry ${msg.role}">
+            <strong>${msg.role === 'model' ? 'AI' : 'Expert'}:</strong>
+            <div class="markdown-body">${marked.parse(msg.content)}</div>
+        </div>
+    `).join('');
+    expertLog.scrollTop = expertLog.scrollHeight;
+};
+
+const appendExpertChunk = (chunk) => {
+    if (!chunk) return;
+    const block = document.createElement('div');
+    block.style.marginBottom = '1rem';
+    const actionColor = chunk.action === 'updated' ? '#f59e0b' : '#10b981';
+    block.innerHTML = `
+        <strong style="color:${actionColor}">${chunk.action ? chunk.action.toUpperCase() : 'NEW'}: ${escapeHtml(chunk.title)}</strong>
+        <pre style="white-space:pre-wrap;">${escapeHtml(JSON.stringify(chunk, null, 2))}</pre>
+    `;
+    expertChunkLog.prepend(block);
+};
+
+expertForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const content = expertInput.value.trim();
+    if (!content) return;
+    expertMessages.push({ role: 'user', content });
+    expertInput.value = '';
+    expertStatus.textContent = 'Gathering thoughts...';
+    renderExpertMessages();
+
+    try {
+        const response = await fetch('/api/chat/expert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: expertMessages })
+        });
+        const data = await response.json();
+        if (!data.ok) throw new Error(data.error || 'Chat failed');
+        expertMessages.push({ role: 'model', content: data.reply });
+        renderExpertMessages();
+        expertStatus.textContent = data.autoChunk ? `Auto-action: ${data.autoChunk.action} ${data.autoChunk.title}` : '';
+        if (data.autoChunk) appendExpertChunk(data.autoChunk);
+    } catch (err) {
+        expertStatus.textContent = 'Error: ' + err.message;
+    }
+});
+
+const saveButton = document.getElementById('save-chunk');
+saveButton.addEventListener('click', async () => {
+    if (!expertMessages.length) return;
+    expertStatus.textContent = 'Summarizing conversation...';
+    try {
+        const response = await fetch('/api/expert/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: expertMessages })
+        });
+        const data = await response.json();
+        if (!data.ok) throw new Error(data.error || 'Save failed');
+        if (data.chunk) {
+            appendExpertChunk(data.chunk);
+            expertStatus.textContent = `Saved chunk: ${data.chunk.title}`;
+        } else {
+            expertStatus.textContent = 'Conversation missing actionable details.';
+        }
+    } catch (err) {
+        expertStatus.textContent = 'Error: ' + err.message;
+    }
+});
+
+renderExpertMessages();
+</script>
+{% endblock %}

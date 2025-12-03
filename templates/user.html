@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% set active = 'user' %}
+{% block body %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<div class="card">
+    <h2>Expert Process System</h2>
+    <p>Ask any question about your business processes. Responses blend Gemini reasoning with the curated document knowledge base.</p>
+    <div style="display:flex; gap:1.5rem; flex-wrap: wrap;">
+        <div style="flex:2; min-width: 320px;">
+            <div id="user-chat-log" class="chat-log"></div>
+            <form id="user-chat-form" style="margin-top: 1rem; display:flex; gap:0.75rem;">
+                <input id="user-input" type="text" placeholder="Ask about a process..." style="flex:1; padding:0.75rem; border-radius:0.5rem; border:1px solid #334155; background:#0f172a; color:#f8fafc;" required>
+                <button class="btn" type="submit">Send</button>
+            </form>
+            <div id="user-status" style="margin-top:0.75rem; color:#38bdf8;"></div>
+        </div>
+        <div style="flex:1; min-width:280px;">
+            <details>
+                <summary style="cursor:pointer; font-weight:bold; margin-bottom:0.5rem;">Context in play (click to view)</summary>
+                <div id="context-panel" class="context-panel"></div>
+            </details>
+        </div>
+    </div>
+</div>
+<script>
+const userMessages = [];
+let currentContext = [];
+const userChatLog = document.getElementById('user-chat-log');
+const userForm = document.getElementById('user-chat-form');
+const userInput = document.getElementById('user-input');
+const contextPanel = document.getElementById('context-panel');
+const statusBox = document.getElementById('user-status');
+
+const escapeHtml = (value = '') => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+const linkifyResponse = (text, context) => {
+    if (!context || !context.length) return text;
+    
+    // Replace [ID] with clickable links
+    return text.replace(/\[(\d+)\]/g, (match, id) => {
+        const chunk = context.find(c => c.id == id);
+        if (chunk && chunk.metadata && chunk.metadata.download_link) {
+            let href = chunk.metadata.download_link;
+            if (chunk.metadata.page_number) {
+                href += `#page=${chunk.metadata.page_number}`;
+            }
+            return `<a href="${href}" target="_blank" style="color:#38bdf8; text-decoration:underline;">${match}</a>`;
+        }
+        return match;
+    });
+};
+
+const renderMessages = (element, messages) => {
+    element.innerHTML = messages.map(msg => {
+        let contentHtml = '';
+        if (msg.role === 'model') {
+            // First parse markdown
+            let rawHtml = marked.parse(msg.content);
+            // Then inject links into the HTML
+            contentHtml = linkifyResponse(rawHtml, currentContext);
+        } else {
+            contentHtml = escapeHtml(msg.content).replace(/\n/g, '<br>');
+        }
+        
+        return `
+        <div class="chat-entry ${msg.role}">
+            <strong>${msg.role === 'model' ? 'AI' : 'You'}:</strong>
+            <div class="markdown-body">${contentHtml}</div>
+        </div>
+    `}).join('');
+    element.scrollTop = element.scrollHeight;
+};
+
+const renderContext = (chunks) => {
+    if (!chunks || !chunks.length) {
+        contextPanel.innerHTML = '<em>No semantic matches yet.</em>';
+        return;
+    }
+    contextPanel.innerHTML = chunks.map(chunk => {
+        const downloadLink = chunk.metadata && chunk.metadata.download_link;
+        const sourceHtml = downloadLink 
+            ? `<a href="${downloadLink}" target="_blank" style="color:#cbd5f5; text-decoration:underline;">${escapeHtml(chunk.source)}</a>`
+            : escapeHtml(chunk.source);
+            
+        return `
+        <div style="margin-bottom:1rem;">
+            <strong>[${chunk.id}] ${escapeHtml(chunk.title)}</strong>
+            <div style="font-size:0.85rem; color:#cbd5f5;">${sourceHtml}</div>
+            <p style="white-space:pre-wrap;">${escapeHtml(chunk.content)}</p>
+        </div>
+    `}).join('');
+};
+
+userForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const content = userInput.value.trim();
+    if (!content) return;
+
+    userMessages.push({ role: 'user', content });
+    userInput.value = '';
+    statusBox.textContent = 'Thinking...';
+    renderMessages(userChatLog, userMessages);
+
+    try {
+        const response = await fetch('/api/chat/user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: userMessages })
+        });
+        const data = await response.json();
+        if (!data.ok) {
+            throw new Error(data.error || 'Unknown error');
+        }
+        currentContext = data.context; // Update context before rendering
+        userMessages.push({ role: 'model', content: data.reply });
+        renderMessages(userChatLog, userMessages);
+        renderContext(data.context);
+        statusBox.textContent = '';
+    } catch (err) {
+        statusBox.textContent = 'Error: ' + err.message;
+    }
+});
+
+renderContext([]);
+</script>
+{% endblock %}

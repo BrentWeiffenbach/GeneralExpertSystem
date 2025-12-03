@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% set active = 'debug' %}
+{% block body %}
+<div class="card" style="margin-bottom: 2rem;">
+    <h2>Database Management</h2>
+    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+        <button class="btn" id="backup-btn">Create Backup</button>
+        <button class="btn" id="reset-btn" style="background-color: #dc3545;">Reset Database</button>
+    </div>
+    
+    <h3>Backups</h3>
+    <ul id="backup-list" style="list-style: none; padding: 0;"></ul>
+</div>
+
+<div class="card">
+    <h2>Chunk inspector</h2>
+    <p>Peek at everything inside the knowledge base. Use this to verify chunk metadata, document coverage, and automatic writes.</p>
+    <button class="btn" id="refresh">Refresh</button>
+    <p style="margin-top:0.75rem;">Total chunks: <span id="chunk-count">0</span></p>
+    <div style="overflow-x:auto;">
+        <table id="chunk-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Source</th>
+                    <th>Chunk #</th>
+                    <th>Created</th>
+                    <th>Metadata</th>
+                    <th>Raw text</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+    <div style="background:white; margin:5% auto; padding:2rem; width:80%; max-width:800px; border-radius:8px;">
+        <h3>Edit Chunk <span id="edit-id"></span></h3>
+        <div style="margin-bottom:1rem;">
+            <label style="display:block; margin-bottom:0.5rem;">Content:</label>
+            <textarea id="edit-content" style="width:100%; height:300px; padding:0.5rem; font-family:monospace;"></textarea>
+        </div>
+        <div style="margin-bottom:1rem;">
+            <label style="display:block; margin-bottom:0.5rem;">Metadata (JSON):</label>
+            <textarea id="edit-metadata" style="width:100%; height:150px; padding:0.5rem; font-family:monospace;"></textarea>
+        </div>
+        <div style="display:flex; gap:1rem; justify-content:flex-end;">
+            <button class="btn secondary" onclick="closeEditModal()">Cancel</button>
+            <button class="btn" onclick="saveEdit()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const refreshBtn = document.getElementById('refresh');
+const tableBody = document.querySelector('#chunk-table tbody');
+const chunkCount = document.getElementById('chunk-count');
+const backupBtn = document.getElementById('backup-btn');
+const resetBtn = document.getElementById('reset-btn');
+const backupList = document.getElementById('backup-list');
+
+// Edit Modal Elements
+const editModal = document.getElementById('edit-modal');
+const editIdSpan = document.getElementById('edit-id');
+const editContent = document.getElementById('edit-content');
+const editMetadata = document.getElementById('edit-metadata');
+let currentEditId = null;
+
+const escapeHtml = (value = '') => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+const summarize = (value = '', limit = 200) => {
+    if (value.length <= limit) return value;
+    return `${value.slice(0, limit)}…`;
+};
+
+window.deleteChunk = async (id) => {
+    if (!confirm(`Delete chunk ${id}? This cannot be undone.`)) return;
+    try {
+        const res = await fetch(`/api/chunks/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            loadChunks();
+        } else {
+            alert('Failed to delete chunk');
+        }
+    } catch (e) {
+        alert(e.message);
+    }
+};
+
+window.openEditModal = (id, contentEncoded, metadataEncoded) => {
+    currentEditId = id;
+    editIdSpan.textContent = id;
+    editContent.value = decodeURIComponent(contentEncoded);
+    editMetadata.value = decodeURIComponent(metadataEncoded);
+    editModal.style.display = 'block';
+};
+
+window.closeEditModal = () => {
+    editModal.style.display = 'none';
+    currentEditId = null;
+};
+
+window.saveEdit = async () => {
+    if (!currentEditId) return;
+    try {
+        const content = editContent.value;
+        let metadata;
+        try {
+            metadata = JSON.parse(editMetadata.value);
+        } catch (e) {
+            alert('Invalid JSON in metadata');
+            return;
+        }
+
+        const res = await fetch(`/api/chunks/${currentEditId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, metadata })
+        });
+
+        if (res.ok) {
+            closeEditModal();
+            loadChunks();
+        } else {
+            alert('Failed to update chunk');
+        }
+    } catch (e) {
+        alert(e.message);
+    }
+};
+
+const loadBackups = async () => {
+    try {
+        const res = await fetch('/api/admin/backups');
+        const data = await res.json();
+        if (data.ok) {
+            backupList.innerHTML = data.backups.map(b => `
+                <li style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee;">
+                    <span>${b.name} (${b.created})</span>
+                    <button onclick="restoreBackup('${b.name}')" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Restore</button>
+                </li>
+            `).join('');
+        }
+    } catch (e) { console.error(e); }
+};
+
+backupBtn.onclick = async () => {
+    const name = prompt("Backup name (optional):");
+    if (name === null) return;
+    await fetch('/api/admin/backup', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name})
+    });
+    loadBackups();
+};
+
+resetBtn.onclick = async () => {
+    if (!confirm("Are you sure? This will delete all chunks!")) return;
+    await fetch('/api/admin/reset', { method: 'POST' });
+    loadChunks();
+};
+
+window.restoreBackup = async (name) => {
+    if (!confirm(`Restore ${name}? Current data will be lost.`)) return;
+    await fetch('/api/admin/restore', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name})
+    });
+    loadChunks();
+};
+
+const loadChunks = async () => {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Loading...';
+    try {
+        const response = await fetch('/api/chunks');
+        const data = await response.json();
+        if (!data.ok) throw new Error(data.error || 'Failed to load chunks');
+        chunkCount.textContent = data.total;
+        tableBody.innerHTML = data.chunks.map(chunk => {
+            const contentEncoded = encodeURIComponent(chunk.content || '');
+            const metadataEncoded = encodeURIComponent(JSON.stringify(chunk.metadata, null, 2));
+            return `
+            <tr>
+                <td>${chunk.id}</td>
+                <td>${escapeHtml(chunk.title)}</td>
+                <td>${escapeHtml(chunk.source)}</td>
+                <td>${chunk.chunk_index ?? '—'}</td>
+                <td>${chunk.created_at}</td>
+                <td><pre style="white-space:pre-wrap; max-width:320px;">${escapeHtml(JSON.stringify(chunk.metadata, null, 2))}</pre></td>
+                <td>
+                    <details>
+                        <summary>${escapeHtml(summarize(chunk.content || '')) || 'Empty chunk'}</summary>
+                        <pre style="white-space:pre-wrap; max-height:240px; overflow:auto;">${escapeHtml(chunk.content || '')}</pre>
+                    </details>
+                </td>
+                <td>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.8rem;" onclick="openEditModal(${chunk.id}, '${contentEncoded}', '${metadataEncoded}')">Edit</button>
+                        <button class="btn" style="padding:0.25rem 0.5rem; font-size:0.8rem; background-color:#dc3545;" onclick="deleteChunk(${chunk.id})">Del</button>
+                    </div>
+                </td>
+            </tr>
+        `}).join('');
+    } catch (err) {
+        alert(err.message);
+    } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = 'Refresh';
+    }
+};
+
+refreshBtn.addEventListener('click', loadChunks);
+loadChunks();
+loadBackups();
+</script>
+{% endblock %}

@@ -1,4 +1,8 @@
-google-generativeai 
+Flask
 google-genai
-numpy 
+google-generativeai
+numpy
+pypdf
 pysqlite3
+python-dotenv
+pytest
