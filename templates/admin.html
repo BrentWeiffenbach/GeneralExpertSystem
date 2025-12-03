@@ -14,8 +14,8 @@
 </div>
 
 <div class="card">
-    <h2>Expert intake chat</h2>
-    <p>Talk to the intake AI as if you were logging a new process or experience. It will prompt you for missing info and auto-save when confident.</p>
+    <h2>Troubleshooting intake chat</h2>
+    <p>Talk to the intake AI as if you were logging a new troubleshooting insight or field experience. It will prompt you for missing info and auto-save when confident.</p>
     <div style="display:flex; gap:1rem; flex-wrap: wrap;">
         <div style="flex:2; min-width: 320px;">
             <div id="expert-chat-log" class="chat-log" style="height:360px;"></div>
@@ -44,7 +44,7 @@ const expertLog = document.getElementById('expert-chat-log');
 const expertStatus = document.getElementById('expert-status');
 const expertChunkLog = document.getElementById('expert-chunk-log');
 const expertMessages = [
-    { role: 'model', content: "Hello! I'm the Expert Intake AI. Please share any new troubleshooting steps, field observations, or general knowledge you'd like to add to the system." }
+    { role: 'model', content: "Hello! I'm the Troubleshooting Intake AI. Please share any new troubleshooting steps, field observations, or general knowledge you'd like to add to the system." }
 ];
 
 const escapeHtml = (value = '') => value

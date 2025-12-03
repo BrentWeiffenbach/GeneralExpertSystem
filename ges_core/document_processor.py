@@ -24,7 +24,7 @@ Respond ONLY in JSON with this shape:
 }
 If a field is unknown, emit an empty array or empty string. Keep titles under 80 characters."""
 
-CONVERSATION_TO_CHUNK_PROMPT = """You are an expert system that captures knowledge from conversations.
+CONVERSATION_TO_CHUNK_PROMPT = """You are the Troubleshooting System service that captures knowledge from conversations.
 You will receive a transcript and potentially some existing context chunks.
 Your task is to summarize the FINAL CONSENSUS or NEW KNOWLEDGE from the conversation into a concise knowledge chunk.
 Decide if we should ADD new knowledge or UPDATE an existing chunk.

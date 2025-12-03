@@ -27,7 +27,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
 BACKUP_DIR.mkdir(exist_ok=True)
 
-EXPERT_ASSISTANT_PROMPT = """You are an expert knowledge capture assistant.
+EXPERT_ASSISTANT_PROMPT = """You are the Troubleshooting System knowledge capture assistant.
 The user is a field expert providing new information, troubleshooting steps, or general insights.
 Your goal is to ensure the information is complete, actionable, and correctly integrated.
 

@@ -6,7 +6,7 @@ from gemini import GeminiAPI
 from .document_processor import DocumentProcessor
 from .vector_store import Chunk, VectorStore
 
-USER_ASSISTANT_PROMPT = """You are an Expert Process Assistant, an AI that combines uploaded manuals with field notes.
+USER_ASSISTANT_PROMPT = """You are the Troubleshooting System assistant, an AI that combines uploaded manuals with field notes.
 Answer with clear, actionable steps. Cite specific codes, procedures, or rules when available.
 Prefer concrete instructions over speculation. If the knowledge base lacks an answer, say so and ask for more detail."""
 

@@ -3,13 +3,13 @@
 {% block body %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <div class="card">
-    <h2>Expert Process System</h2>
-    <p>Ask any question about your business processes. Responses blend Gemini reasoning with the curated document knowledge base.</p>
+    <h2>Troubleshooting System</h2>
+    <p>Ask any question about your troubleshooting workflows. Responses blend Gemini reasoning with the curated document knowledge base.</p>
     <div style="display:flex; gap:1.5rem; flex-wrap: wrap;">
         <div style="flex:2; min-width: 320px;">
             <div id="user-chat-log" class="chat-log"></div>
             <form id="user-chat-form" style="margin-top: 1rem; display:flex; gap:0.75rem;">
-                <input id="user-input" type="text" placeholder="Ask about a process..." style="flex:1; padding:0.75rem; border-radius:0.5rem; border:1px solid #334155; background:#0f172a; color:#f8fafc;" required>
+                <input id="user-input" type="text" placeholder="Ask about an issue..." style="flex:1; padding:0.75rem; border-radius:0.5rem; border:1px solid #334155; background:#0f172a; color:#f8fafc;" required>
                 <button class="btn" type="submit">Send</button>
             </form>
             <div id="user-status" style="margin-top:0.75rem; color:#38bdf8;"></div>

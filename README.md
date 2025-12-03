@@ -1,9 +1,9 @@
 
-# Troubleshooting General Expert System (MVP)
+# Troubleshooting System (MVP)
 
-This project demonstrates AI orchestration and retrieval-augmented generation (RAG) to power a generalized troubleshooting expert. It ships with:
+This project demonstrates AI orchestration and retrieval-augmented generation (RAG) to power the Troubleshooting System. It ships with:
 
-- **Admin / Expert intake** page for document uploads, semantic chunking, and conversational knowledge capture.
+- **Admin / Troubleshooting intake** page for document uploads, semantic chunking, and conversational knowledge capture.
 - **ChatGPT-style user assistant** grounded in the curated vector database.
 - **Debug view** to inspect the live chunk store.
 
